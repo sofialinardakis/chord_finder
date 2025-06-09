@@ -1,0 +1,79 @@
+import PySimpleGUI as sg
+import threading
+import pygame
+import time
+from output import overlay_chords_on_midi
+
+pygame.mixer.init()
+
+def play_midi_file(midi_file):
+    try:
+        pygame.mixer.music.load(midi_file)
+        pygame.mixer.music.play()
+        while pygame.mixer.music.get_busy():
+            time.sleep(0.1)
+    except Exception as e:
+        print(f"Error playing MIDI: {e}")
+
+def start_playback_thread(midi_file):
+    threading.Thread(target=play_midi_file, args=(midi_file,), daemon=True).start()
+
+layout = [
+    [sg.Text("Chord Model Feedback Trainer")],
+    [sg.Text("Select MIDI file:"), sg.Input(key='-filename-'), sg.FileBrowse(file_types=(("MIDI Files", "*.mid"),))],
+    [sg.Button("Play Song With Chords", key='-play-')],
+    [sg.Text("", key='-status-')],
+    [sg.Text("Is the chord overlay good?")],
+    [sg.Button("Yes"), sg.Button("No")],
+    [sg.Text("Feedback count: 0", key='-feedback-count-')],
+]
+
+window = sg.Window("ChordFinder Trainer", layout, finalize=True)
+
+feedback_count = 0
+feedback_yes = 0
+feedback_no = 0
+
+def process_feedback(is_good):
+    global feedback_count, feedback_yes, feedback_no
+    feedback_count += 1
+    if is_good:
+        feedback_yes += 1
+    else:
+        feedback_no += 1
+    window['-feedback-count-'].update(f"Feedback count: {feedback_count}")
+    # Here you can add code to update your training data or retrain the model every 10 feedbacks
+    if feedback_count % 10 == 0:
+        window['-status-'].update("Retraining model with feedback...")
+        # Implement retrain logic here (blocking or threaded)
+        import train
+        train.train()
+        window['-status-'].update("Retraining complete.")
+
+while True:
+    event, values = window.read()
+    if event in (sg.WIN_CLOSED, 'Exit'):
+        break
+
+    elif event == '-play-':
+        filename = values['-filename-']
+        if filename:
+            window['-status-'].update(f"Generating chords for {filename} ...")
+            try:
+                output_file = "output_with_chords.mid"
+                overlay_chords_on_midi(filename, output_file, model_path='model.pth',
+                                       melody_velocity_scale=0.3, chord_velocity_scale=1.0)
+                window['-status-'].update("Playing output with chords...")
+                start_playback_thread(output_file)
+            except Exception as e:
+                window['-status-'].update(f"Error: {e}")
+
+    elif event == 'Yes':
+        process_feedback(True)
+        window['-status-'].update("Thank you for positive feedback!")
+
+    elif event == 'No':
+        process_feedback(False)
+        window['-status-'].update("Thank you for your feedback! Model will improve.")
+
+window.close()

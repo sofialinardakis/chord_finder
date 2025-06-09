@@ -1,0 +1,15 @@
+import pandas as pd
+
+def filter_rnb():
+    df = pd.read_csv('songs_metadata.csv')
+    print(df['genre'].dropna().unique()[:50])  # Show first 50 unique genre strings
+
+    # Convert genre to string and fill missing with empty string
+    df['genre'] = df['genre'].fillna('').astype(str).str.lower()
+    rnb_songs = df[df['genre'].str.contains('r&b')]
+    rnb_songs.to_csv('filtered_rnb_songs.csv', index=False)
+    print(f"Filtered {len(rnb_songs)} R&B songs.")
+
+if __name__ == "__main__":
+    
+    filter_rnb()
